@@ -1,0 +1,343 @@
+﻿МІНІСТЕРСТВО ОСВІТИ І НАУКИ УКРАЇНИ
+ХАРКІВСЬКИЙ НАЦІОНАЛЬНИЙ УНІВЕРСИТЕТ РАДІОЕЛЕКТРОНІКИ
+
+
+КАФЕДРА ПРОГРАМНОЇ ІНЖЕНЕРІЇ
+
+
+
+
+
+
+Звіт з лабораторної роботи №1
+з дисципліни «Скриптові Мови Програмування»
+
+
+
+
+
+
+
+
+Виконав:
+ст. гр. ПЗПІ-23-4
+ст. викладач катедри ПІ
+Сокорчук Ігор Петрович.
+Даниленко Назар
+
+
+
+
+Харків 2025
+
+
+
+
+
+
+
+
+Лабораторна робота № 1
+Мета роботи:
+* Ознайомитися з основними командами Bash для роботи з файлами та текстовими даними
+* Навчитися використовувати команди select, ls, awk, sort, uniq, tee, cat, sed, iconv тощо
+* Розробити Bash-скрипт для перетворення CSV файла розкладу занять у придатний для імпорту в Google Календар CSV формат
+
+
+Завдання
+Розробити Bash-скрипт, який обробляє експортований із сайту https://cist.nure.ua/ розклад занять для всіх груп потоку в форматі CSV та перетворює його у формат CSV для завантаження в Google Календар https://support.google.com/
+Опис виконаної роботи
+Для виконання лабораторної роботи було створено Bash-скрипт, який відповідає всім вимогам завдання. Робота проводилася в середовищі Git Bash на Windows 11, що забезпечило сумісність із Unix-командами.
+Налаштування середовища:
+Використано Git Bash для виконання скрипта, встановлено необхідні утиліти (coreutils, gawk, sed, iconv).
+Створено тестову папку /d/not soft/H-T NURE/sem4/SMP/LABS для роботи з файлами.
+Підготовлено тестовий CSV-файл TimeTable_15_03_2025.csv із даними розкладу в кодуванні Windows-1251.
+Розробка скрипта:
+Обробка аргументів: Скрипт парсить аргументи (--help, --version, -q/--quiet, група, файл) за допомогою конструкції case у циклі while. Наприклад:
+bash
+ЗгорнутиЗгорниВиконати
+Копіювати
+./yourname-task2 ПЗПІ-23-12 TimeTable_15_03_2025.csv
+
+Інтерактивний вибір: Якщо файл або група не вказані, скрипт використовує select для створення меню вибору файлів (TimeTable_ДД_ММ_РРРР.csv) та груп (ПЗПІ-23-X), відсортованих за датою та алфавітом.
+Обробка CSV:
+Використано iconv для конвертації з Windows-1251 у UTF-8.
+sed видаляє символи повернення каретки (\r).
+awk фільтрує рядки за групою, видаляє назву групи з поля Subject, визначає тип заняття (Лб, Лк, Пз, Екз) і створює ключ сортування (sort_key).
+Дані сортуються за датою та часом за допомогою sort.
+Форматування для Google Календаря:
+Другий awk перетворює дати у формат mm/dd/yyyy (наприклад, 15.03.2025 → 03/15/2025) і час у 12-годинний формат із AM/PM (наприклад, 13:25 → 01:25 PM).
+Додається нумерація занять (; №1, ; №2), враховуючи, що лабораторні роботи займають дві пари.
+Результат записується у файл Google_TimeTable_ДД_ММ_РРРР.csv через tee і виводиться в консоль (якщо не вказано -q).
+Обробка помилок:
+Перевірка існування та доступності файлу (коди помилок 1, 2).
+Перевірка наявності груп у файлі (код 3).
+Перевірка коректності вказаної групи (код 4).
+Використання trap для видалення тимчасових файлів ($tmp_data, $sorted_data) при завершенні.
+
+
+Висновки 
+Що ми навчилися:
+Використання select для інтерактивного вибору.
+Обробка CSV за допомогою awk із кастомними функціями.
+Конвертація кодувань через iconv.
+Форматування даних для Google Календаря.
+Скрипт демонструє, як Bash може обробляти складні текстові дані.
+Поєднання awk, sed, sort, і uniq робить скрипт потужним інструментом для автоматизації.
+
+
+ДОДАТОК А
+Відеозапис
+Відеозапис презентації результатів лабораторної роботи: https://youtu.be/mAkXuyvOZ0Y
+Хронологічний опис відеозапису:
+Вступ (0:00–0:30)
+Загальний огляд скрипта (0:30–1:30)
+Покроковий розбір коду (1:30–9:30)
+Вибір файлу та групи (3:30–4:30)
+Обробка CSV і форматування (4:30–6:30)
+Висновки  (6:30–10:00)
+Демо працездатності (10:00 - 12:00)
+
+
+Додаток В
+Програмний код
+В.1 Bash-скрипт для обробки розкладу занять
+GitHub репозиторій: https://github.com/NureDanylenkoNazar/smp-pzpi-23-4-danylenko-nazar
+
+
+
+1  #!/bin/bash
+ 2  
+ 3  # Версія скрипта
+ 4  VERSION="1.0"
+ 5  
+ 6  # Змінні для аргументів
+ 7  INPUT_FILE=""
+ 8  GROUP=""
+ 9  QUIET=false
+10  
+11  # Обробка аргументів командного рядка
+12  while [[ $# -gt 0 ]]; do
+13      case "$1" in
+14          --help)
+15              echo "Використання: $0 [--help | --version] | [[-q|--quiet] [академ_група] файл_із_cist.csv]"
+16              echo "  --help        Відображення довідки"
+17              echo "  --version     Відображення версії скрипта"
+18              echo "  -q, --quiet   Не виводити дані у stdout"
+19              exit 0
+20              ;;
+21          --version)
+22              echo "Версія: $VERSION"
+23              exit 0
+24              ;;
+25          -q|--quiet)
+26              QUIET=true
+27              ;;
+28          *.csv)
+29              INPUT_FILE="$1"
+30              ;;
+31          *)
+32              GROUP="$1"
+33              ;;
+34      esac
+35      shift
+36  done
+37  
+38  # Перевірка наявності файлу, якщо не вказано
+39  if [ -z "$INPUT_FILE" ]; then
+40      # Знаходимо файли за шаблоном TimeTable_ДД_ММ_РРРР.csv
+41      files=($(ls | grep -E '^TimeTable_.._.._20..\.csv' | sort -t'_' -k2,2n -k3,3n -k4,4n))
+42      if [ ${#files[@]} -eq 0 ]; then
+43          echo "Помилка: файли TimeTable_ДД_ММ_РРРР.csv не знайдено" >&2
+44          exit 1
+45      fi
+46      files+=("Вийти")
+47      echo "Оберіть файл із розкладом:"
+48      select chosen_file in "${files[@]}"; do
+49          if [ "$chosen_file" = "Вийти" ]; then
+50              echo "Вихід із програми."
+51              exit 0
+52          fi
+53          if [ -n "$chosen_file" ]; then
+54              INPUT_FILE="$chosen_file"
+55              break
+56          else
+57              echo "Помилка: виберіть номер зі списку." >&2
+58          fi
+59      done
+60  fi
+61  
+62  # Перевірка існування файлу
+63  if [ ! -f "$INPUT_FILE" ] || [ ! -r "$INPUT_FILE" ]; then
+64      echo "Помилка: файл $INPUT_FILE не існує або недоступний для читання" >&2
+65      exit 2
+66  fi
+67  
+68  # Витягуємо унікальні групи з файлу
+69  groups=($(cat "$INPUT_FILE" | sed 's/\r/\n/g' | iconv -f CP1251 -t UTF-8 | awk '
+70      BEGIN { FPAT="[^,]*|\"[^\"]*\"" }
+71      NR > 1 {
+72          gsub(/^"|"$/, "", $1)
+73          if ($1 ~ /ПЗПІ-23-[0-9]+/) {
+74              match($1, /ПЗПІ-23-[0-9]+/)
+75              print substr($1, RSTART, RLENGTH)
+76          }
+77      }' | sort | uniq))
+78  if [ ${#groups[@]} -eq 0 ]; then
+79      echo "Помилка: у файлі $INPUT_FILE не знайдено груп ПЗПІ-23-?" >&2
+80      exit 3
+81  fi
+82  
+83  # Якщо група не вказана, але є лише одна група
+84  if [ -z "$GROUP" ] && [ ${#groups[@]} -eq 1 ]; then
+85      GROUP="${groups[0]}"
+86      echo "Знайдено лише одну групу: $GROUP"
+87  elif [ -z "$GROUP" ]; then
+88      # Вибір групи через select
+89      echo "Доступні групи:"
+90      groups+=("Повернутись")
+91      select chosen_group in "${groups[@]}"; do
+92          if [ "$chosen_group" = "Повернутись" ]; then
+93              echo "Повернення до вибору файлу."
+94              exit 0
+95          fi
+96          if [ -n "$chosen_group" ]; then
+97              GROUP="$chosen_group"
+98              break
+99          else
+100             echo "Помилка: виберіть номер зі списку." >&2
+101         fi
+102     done
+103 fi
+104 
+105 # Перевірка, чи група є у файлі
+106 if ! echo "${groups[@]}" | grep -qw "$GROUP"; then
+107     echo "Помилка: група $GROUP не знайдена у файлі $INPUT_FILE" >&2
+108     exit 4
+109 fi
+110 
+111 # Формуємо вихідний файл
+112 output_file=$(echo "$INPUT_FILE" | sed 's/TimeTable/Google_TimeTable/')
+113 echo "Формування розкладу для Google Календаря: $output_file"
+114 
+115 # Створюємо тимчасові файли
+116 tmp_data=$(mktemp)
+117 sorted_data=$(mktemp)
+118 
+119 # Гарантуємо видалення тимчасових файлів при виході
+120 trap 'rm -f "$tmp_data" "$sorted_data"' EXIT
+121 
+122 # Обробка CSV та фільтрація за групою
+123 cat "$INPUT_FILE" | sed 's/\r/\n/g' | iconv -f CP1251 -t UTF-8 | awk -v GROUP="$GROUP" '
+124 BEGIN {
+125     FS=","; OFS="\t"
+126 }
+127 NR == 1 { next
+}
+128 
+129 function trim_quotes(s) {
+130     gsub(/^"|"$/, "", s)
+131     return s
+132 }
+133 
+134 {
+135     line = $0
+136     match(line, /"[0-3][0-9]\.[0-1][0-9]\.[0-9]{4}"/)
+137     if (RSTART == 0) { next }
+138 
+139     field1 = substr(line, 1, RSTART - 2)
+140     rest = substr(line, RSTART)
+141 
+142     n = 0; in_quotes = 0; field = ""
+143     for (i = 1; i <= length(rest); i++) {
+144         c = substr(rest, i, 1)
+145         if (c == "\"") in_quotes = !in_quotes
+146         else if (c == "," && !in_quotes) {
+147             fields[++n] = field
+148             field = ""
+149         } else {
+150             field = field c
+151         }
+152     }
+153     fields[++n] = field
+154     for (i = 1; i <= n; i++) fields[i] = trim_quotes(fields[i])
+155     if (n < 6) next
+156 
+157     if ($1 !~ GROUP) next
+158 
+159     subject = trim_quotes(field1)
+160     sub(GROUP " - ", "", subject)
+161 
+162     desc = fields[5]
+163     type = "Інше"
+164     if (desc ~ /Лб/) type = "Лб"
+165     else if (desc ~ /Лк/) type = "Лк"
+166     else if (desc ~ /Пз/) type = "Пз"
+167     else if (desc ~ /Екз/) type = "Екз"
+168 
+169     sort_key = sprintf("%s%02d%02d%02d%02d", substr(fields[1],7,4), substr(fields[1],4,2), substr(fields[1],1,2), substr(fields[2],1,2), substr(fields[2],4,2))
+170 
+171     print subject, type, fields[1], fields[2], fields[3], fields[4], desc, sort_key
+172 }' > "$tmp_data"
+173 
+174 # Виведення вмісту $tmp_data у консоль (для дебагінгу)
+175 if [ "$QUIET" = false ]; then
+176     echo "Вміст тимчасового файлу $tmp_data:"
+177     cat "$tmp_data"
+178 fi
+179 
+180 # Сортування за датою та часом
+181 sort -t $'\t' -k8,8 "$tmp_data" > "$sorted_data"
+182 
+183 # Форматування у CSV для Google Календаря
+184 awk -F'\t' '
+185 BEGIN {
+186     OFS = ","
+187     print "Subject,Start Date,Start Time,End Date,End Time,Description"
+188 }
+189 
+190 function format_date(date) {
+191     split(date, dmy, ".")
+192     return sprintf("%02d/%02d/%04d", dmy[2], dmy[1], dmy[3])
+193 }
+194 
+195 function format_time(time) {
+196     split(time, hmin, ":")
+197     h = hmin[1] + 0
+198     min = hmin[2]
+199     ap = (h >= 12) ? "PM" : "AM"
+200     if (h == 0) h = 12
+201     else if (h > 12) h -= 12
+202     return sprintf("%02d:%s %s", h, min, ap)
+203 }
+204 
+205 {
+206     subj_key = $1 "_" $2
+207     date_key = $3 "_" $7
+208 
+209     if ($2 == "Лб") {
+210         if (!(date_key in lab_seen)) {
+211             count[subj_key]++
+212             lab_seen[date_key] = count[subj_key]
+213         }
+214         number = lab_seen[date_key]
+215     } else {
+216         count[subj_key]++
+217         number = count[subj_key]
+218     }
+219 
+220     subject_full = $1 "; №" number
+221     start_date = format_date($3)
+222     start_time = format_time($4)
+223     end_date = format_date($5)
+224     end_time = format_time($6)
+225     desc = $7
+227     printf "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n", \
+228         subject_full, start_date, start_time, end_date, end_time, desc
+229 }' "$sorted_data" | tee "$output_file"
+230 
+231 # Вивід результату, якщо не -q
+232 if [ "$QUIET" = false ]; then
+233     cat "$output_file"
+234 fi
+236 echo "Google-файл сформовано: $output_file"
